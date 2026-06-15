@@ -1,0 +1,13 @@
+[project]
+name = "ccdoctor"
+version = "0.1.0"
+description = "Inspect Claude Code visibility for the current project"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+ccdoctor = "ccdoctor.__main__:main"
+ccd = "ccdoctor.__main__:main"
+
+[tool.uv]
+package = true

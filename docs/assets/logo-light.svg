@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" role="img" aria-labelledby="title desc">
+  <title id="title">ccdoctor logo</title>
+  <desc id="desc">A Claude-inspired diagnostic icon with a doctor's cap and red cross.</desc>
+  <rect width="180" height="180" rx="38" fill="#ffffff"/>
+  <circle cx="90" cy="96" r="54" fill="#f6f8fa" stroke="#d0d7de" stroke-width="3"/>
+  <g fill="none" stroke="#d97757" stroke-width="13" stroke-linecap="round">
+    <path d="M90 51v90"/>
+    <path d="M51 73l78 46"/>
+    <path d="M129 73l-78 46"/>
+  </g>
+  <circle cx="90" cy="96" r="13" fill="#24292f"/>
+  <path d="M54 42c13-18 59-18 72 0l-11 18H65z" fill="#ffffff" stroke="#d0d7de" stroke-width="3"/>
+  <rect x="83" y="31" width="14" height="24" rx="3" fill="#dc2626"/>
+  <rect x="78" y="36" width="24" height="14" rx="3" fill="#dc2626"/>
+  <circle cx="132" cy="132" r="20" fill="#2da44e" stroke="#1a7f37" stroke-width="3"/>
+  <path d="M122 132l7 7 16-17" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

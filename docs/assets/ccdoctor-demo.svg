@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560" role="img" aria-labelledby="title desc">
+  <title id="title">ccdoctor terminal output demo</title>
+  <desc id="desc">A terminal screenshot showing ccdoctor mcp playwright output with colored sections and status icons.</desc>
+  <rect width="980" height="560" rx="18" fill="#0d1117"/>
+  <rect x="0" y="0" width="980" height="42" rx="18" fill="#161b22"/>
+  <circle cx="25" cy="21" r="7" fill="#ff5f56"/>
+  <circle cx="48" cy="21" r="7" fill="#ffbd2e"/>
+  <circle cx="71" cy="21" r="7" fill="#27c93f"/>
+  <text x="92" y="27" fill="#8b949e" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14">ccdoctor</text>
+
+  <g font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">
+    <text x="28" y="78" fill="#7ee787">$ ccd mcp playwright -p ~/Projects/my_ai</text>
+    <text x="28" y="116" fill="#79c0ff">✨ Claude Code Doctor</text>
+    <text x="28" y="144" fill="#f0f6fc">📁 <tspan font-weight="700">Project:</tspan> /Users/example/Projects/my_ai</text>
+    <text x="28" y="192" fill="#d2a8ff" font-weight="700">🧰 MCPs</text>
+
+    <text x="42" y="226" fill="#f2cc60">⚠️ playwright</text>
+    <text x="178" y="226" fill="#8b949e">[declared, declared, effective=maybe, managed_by=my_ai manifest]</text>
+    <text x="64" y="254" fill="#8b949e">kind:</text><text x="128" y="254" fill="#f0f6fc">mcp</text>
+    <text x="64" y="278" fill="#8b949e">source_file:</text><text x="176" y="278" fill="#f0f6fc">mcps/MCP_MANIFEST.md</text>
+
+    <text x="42" y="326" fill="#ff7b72">❌ playwright</text>
+    <text x="178" y="326" fill="#8b949e">[nested-project, configured, effective=no]</text>
+    <text x="64" y="354" fill="#8b949e">command:</text><text x="152" y="354" fill="#f0f6fc">/bin/zsh</text>
+    <text x="64" y="378" fill="#8b949e">args:</text><text x="128" y="378" fill="#f0f6fc">node "$MY_AI_ROOT/mcps/playwright-mcp/..."</text>
+
+    <text x="42" y="426" fill="#7ee787">✅ playwright</text>
+    <text x="178" y="426" fill="#8b949e">[project, configured, effective=yes]</text>
+    <text x="64" y="454" fill="#8b949e">type:</text><text x="128" y="454" fill="#f0f6fc">stdio</text>
+    <text x="64" y="478" fill="#8b949e">command:</text><text x="152" y="478" fill="#f0f6fc">/bin/zsh</text>
+    <text x="64" y="502" fill="#8b949e">config:</text><text x="136" y="502" fill="#f0f6fc">redacted JSON metadata for this MCP entry</text>
+  </g>
+</svg>

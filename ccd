@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -euo pipefail
+
+TOOL_DIR="${0:A:h}"
+exec uv run --project "$TOOL_DIR" python -m ccdoctor "$@"
