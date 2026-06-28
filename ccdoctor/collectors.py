@@ -239,6 +239,18 @@ def collect_mcps(
     user_state_path = Path.home() / ".claude.json"
     collect_mcp_servers(user_state.get("mcpServers", {}) if isinstance(user_state, dict) else {}, "global", "configured", "yes", str(user_state_path), items, diagnostics, tool_name=tool_name)
 
+    for parent_root in parent_project_roots(project_root):
+        collect_mcp_config(
+            parent_root / ".mcp.json",
+            "parent-project",
+            "configured",
+            "yes",
+            items,
+            diagnostics,
+            tool_name=tool_name,
+            extra_metadata={"project_root": str(parent_root)},
+        )
+
     project_mcp = project_root / ".mcp.json"
     collect_mcp_config(project_mcp, "project", "configured", "yes", items, diagnostics, tool_name=tool_name)
 
@@ -280,12 +292,24 @@ def collect_mcp_config(
     diagnostics: list[Diagnostic],
     managed_by: str | None = None,
     tool_name: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> None:
     if not path.exists():
         return
     config = read_json(path, diagnostics, optional=True)
     servers = config.get("mcpServers", {}) if isinstance(config, dict) else {}
-    collect_mcp_servers(servers, scope, provider, effective, str(path), items, diagnostics, managed_by=managed_by, tool_name=tool_name)
+    collect_mcp_servers(
+        servers,
+        scope,
+        provider,
+        effective,
+        str(path),
+        items,
+        diagnostics,
+        managed_by=managed_by,
+        tool_name=tool_name,
+        extra_metadata=extra_metadata,
+    )
 
 
 def collect_mcp_servers(
@@ -298,6 +322,7 @@ def collect_mcp_servers(
     diagnostics: list[Diagnostic],
     managed_by: str | None = None,
     tool_name: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> None:
     if not isinstance(servers, dict):
         return
@@ -309,6 +334,7 @@ def collect_mcp_servers(
             "args": server.get("args", []),
             "env": server.get("env", {}),
             "config": server,
+            **(extra_metadata or {}),
         })
         if tool_name and mcp_name_matches(str(name), tool_name):
             tools = collect_mcp_tools(server, diagnostics, source_file, str(name))
@@ -452,6 +478,26 @@ def terminate_process(proc: subprocess.Popen[bytes]) -> None:
         proc.wait(timeout=1.0)
 
 
+def parent_project_roots(project_root: Path) -> list[Path]:
+    home = Path.home().resolve(strict=False)
+    root = project_root.resolve(strict=False)
+    try:
+        root.relative_to(home)
+    except ValueError:
+        return []
+    if root == home:
+        return []
+
+    roots: list[Path] = []
+    current = root.parent
+    while True:
+        roots.append(current)
+        if current == home:
+            break
+        current = current.parent
+    return roots
+
+
 def find_nested_mcp_configs(project_root: Path) -> list[Path]:
     nested: list[Path] = []
     skip_parts = {".git", ".venv", "node_modules", "__pycache__"}
@@ -480,6 +526,15 @@ def parse_manifest_names(path: Path, diagnostics: list[Diagnostic]) -> list[str]
 def collect_skills(project_root: Path, control_root: Path, plugins: list[StatusItem], diagnostics: list[Diagnostic]) -> list[StatusItem]:
     items: list[StatusItem] = []
     collect_skill_directory(USER_CLAUDE_DIR / "skills", "global", control_root, items, diagnostics)
+    for parent_root in parent_project_roots(project_root):
+        collect_skill_directory(
+            parent_root / ".claude" / "skills",
+            "parent-project",
+            control_root,
+            items,
+            diagnostics,
+            extra_metadata={"project_root": str(parent_root)},
+        )
     collect_skill_directory(project_root / ".claude" / "skills", "project", control_root, items, diagnostics)
 
     for plugin in plugins:
@@ -515,7 +570,14 @@ def collect_skills(project_root: Path, control_root: Path, plugins: list[StatusI
     return items
 
 
-def collect_skill_directory(directory: Path, scope: str, control_root: Path, items: list[StatusItem], diagnostics: list[Diagnostic]) -> None:
+def collect_skill_directory(
+    directory: Path,
+    scope: str,
+    control_root: Path,
+    items: list[StatusItem],
+    diagnostics: list[Diagnostic],
+    extra_metadata: dict[str, Any] | None = None,
+) -> None:
     if not directory.exists():
         return
     for child in sorted(directory.iterdir(), key=lambda p: p.name):
@@ -530,7 +592,7 @@ def collect_skill_directory(directory: Path, scope: str, control_root: Path, ite
             except OSError:
                 target_exists = False
         provider, managed_by = classify_skill_target(target or child, control_root)
-        metadata = {"path": str(child), "target": str(target) if target else None, "target_exists": target_exists}
+        metadata = {"path": str(child), "target": str(target) if target else None, "target_exists": target_exists, **(extra_metadata or {})}
         skill_file = (target or child) / "SKILL.md" if (target or child).is_dir() else (target or child)
         metadata["summary"] = read_skill_summary(skill_file, diagnostics)
         if not target_exists:

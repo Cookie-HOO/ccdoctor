@@ -297,8 +297,8 @@ ccdoctor [options] [category] [name]
 |---|---|---|
 | Provider/model | `provider`, `model` | 模型、statusline、Claude/Anthropic 环境设置、可选 runtime probe。 |
 | Plugins | `plugin`, `plugins` | 已安装/启用的 Claude Code plugin 和 plugin metadata。 |
-| MCPs | `mcp`, `mcps` | 全局、项目、嵌套项目、plugin-provided、manifest-declared MCP servers。 |
-| Skills | `skill`, `skills` | 全局 skills、项目 skills、plugin-provided skills、runtime/manifest-declared skills。 |
+| MCPs | `mcp`, `mcps` | 全局、父级项目、项目、嵌套项目、plugin-provided、manifest-declared MCP servers。 |
+| Skills | `skill`, `skills` | 全局 skills、父级项目 skills、项目 skills、plugin-provided skills、runtime/manifest-declared skills。 |
 | Agents | `agent`, `agents` | 项目 agents、profile-provided agents、plugin-provided agents。 |
 | Hooks | `hook`, `hooks` | 用户/项目 hooks 和 plugin-provided hook events。 |
 | Permissions | `permission`, `permissions` | Claude Code allow/deny 权限设置。 |
@@ -334,6 +334,7 @@ ccd plugin claude-mem
 | 值 | 含义 |
 |---|---|
 | `project` | 直接配置在被检查项目中。通常在 Claude 从该目录启动时生效。 |
+| `parent-project` | 配置在向上直到 `$HOME` 的父级目录中；Claude Code 的父级项目 MCP 和 Skill 默认对子目录可见。 |
 | `global` | 来自全局 Claude Code 配置，例如 `~/.claude.json` 中的 MCP servers 或 `~/.claude/skills`。 |
 | `user` | 来自当前用户的 Claude Code 配置或 plugin 安装。 |
 | `nested-project` | 位于项目树下，但不是当前被检查的根目录。通常对当前根目录不生效。 |

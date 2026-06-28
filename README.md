@@ -297,8 +297,8 @@ ccdoctor [options] [category] [name]
 |---|---|---|
 | Provider/model | `provider`, `model` | Model, statusline, Claude/Anthropic environment settings, optional runtime probe. |
 | Plugins | `plugin`, `plugins` | Installed/enabled Claude Code plugins and plugin metadata. |
-| MCPs | `mcp`, `mcps` | Global, project, nested-project, plugin-provided, and manifest-declared MCP servers. |
-| Skills | `skill`, `skills` | Global skills, project skills, plugin-provided skills, and runtime/manifest-declared skills. |
+| MCPs | `mcp`, `mcps` | Global, parent-project, project, nested-project, plugin-provided, and manifest-declared MCP servers. |
+| Skills | `skill`, `skills` | Global skills, parent-project skills, project skills, plugin-provided skills, and runtime/manifest-declared skills. |
 | Agents | `agent`, `agents` | Project agents, profile-provided agents, and plugin-provided agents. |
 | Hooks | `hook`, `hooks` | User/project hooks and plugin-provided hook events. |
 | Permissions | `permission`, `permissions` | Claude Code allow/deny permission settings. |
@@ -334,6 +334,7 @@ Every collected record is a `StatusItem` with common fields:
 | Value | Meaning |
 |---|---|
 | `project` | Directly configured in the inspected project. Usually effective when Claude is launched there. |
+| `parent-project` | Configured in a parent directory up to `$HOME`; Claude Code project MCPs and skills from parent directories are visible to child directories by default. |
 | `global` | Comes from global Claude Code configuration, such as `~/.claude.json` MCP servers or `~/.claude/skills`. |
 | `user` | Comes from the current user's Claude Code configuration or plugin installation. |
 | `nested-project` | Found under the project tree but not at the inspected root. Usually not effective for this root. |
