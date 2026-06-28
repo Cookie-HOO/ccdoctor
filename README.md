@@ -117,7 +117,7 @@ Inspect one category or one item:
 ccd mcp
 ccd mcp playwright
 ccd hook PreToolUse
-ccd skill profile-project-bootstrap
+ccd skill profile-project-manager
 ```
 
 Get machine-readable output:
@@ -191,6 +191,13 @@ ccd mcp playwright -p ~/Projects/my_ai
         [
           "-lc",
           "node \"$MY_AI_ROOT/mcps/playwright-mcp/node_modules/@playwright/mcp/cli.js\""
+        ]
+      tools:
+        [
+          {
+            "name": "browser_click",
+            "description": "Perform click on a web page"
+          }
         ]
 ```
 
@@ -290,19 +297,19 @@ ccdoctor [options] [category] [name]
 |---|---|---|
 | Provider/model | `provider`, `model` | Model, statusline, Claude/Anthropic environment settings, optional runtime probe. |
 | Plugins | `plugin`, `plugins` | Installed/enabled Claude Code plugins and plugin metadata. |
-| MCPs | `mcp`, `mcps` | Project, nested-project, plugin-provided, and manifest-declared MCP servers. |
-| Skills | `skill`, `skills` | Project skills, plugin-provided skills, and runtime/manifest-declared skills. |
+| MCPs | `mcp`, `mcps` | Global, project, nested-project, plugin-provided, and manifest-declared MCP servers. |
+| Skills | `skill`, `skills` | Global skills, project skills, plugin-provided skills, and runtime/manifest-declared skills. |
 | Agents | `agent`, `agents` | Project agents, profile-provided agents, and plugin-provided agents. |
 | Hooks | `hook`, `hooks` | User/project hooks and plugin-provided hook events. |
 | Permissions | `permission`, `permissions` | Claude Code allow/deny permission settings. |
 | Diagnostics | `diagnostic`, `diagnostics`, `diag` | Warnings and errors discovered while collecting status. |
 
-Passing a `name` after a category narrows output to matching entries and prints detail metadata:
+Passing a `name` after a category narrows output to matching entries and prints detail metadata. For configured stdio MCPs, the MCP detail view also starts the selected server briefly and lists its available tools and descriptions when the server responds to `tools/list`:
 
 ```bash
 ccd mcp playwright
 ccd hook PreToolUse
-ccd skill profile-project-bootstrap
+ccd skill profile-project-manager
 ccd plugin claude-mem
 ```
 
@@ -327,6 +334,7 @@ Every collected record is a `StatusItem` with common fields:
 | Value | Meaning |
 |---|---|
 | `project` | Directly configured in the inspected project. Usually effective when Claude is launched there. |
+| `global` | Comes from global Claude Code configuration, such as `~/.claude.json` MCP servers or `~/.claude/skills`. |
 | `user` | Comes from the current user's Claude Code configuration or plugin installation. |
 | `nested-project` | Found under the project tree but not at the inspected root. Usually not effective for this root. |
 | `runtime` | Declared as available from the Claude Code runtime or generated runtime manifest. |
@@ -377,7 +385,7 @@ Examples:
 ```bash
 NO_COLOR=1 ccd --json mcp playwright -p /repo
 NO_COLOR=1 ccd --json hook PreToolUse -p /repo
-NO_COLOR=1 ccd --json skill profile-project-bootstrap -p /repo
+NO_COLOR=1 ccd --json skill profile-project-manager -p /repo
 NO_COLOR=1 ccd --json diagnostics -p /repo
 ```
 

@@ -172,8 +172,11 @@ def format_item(item: dict[str, Any], verbose: bool = False) -> str:
     if item.get("kind") == "mcp" and metadata:
         mcp_type = metadata.get("type")
         command = metadata.get("command")
+        tools = metadata.get("tools")
         if command:
             text += f" type={mcp_type} command={command}"
+        if isinstance(tools, list):
+            text += f" tools={len(tools)}"
     if item.get("kind") == "hook" and metadata and metadata.get("summary"):
         text += f" summary={metadata['summary']}"
     if item.get("kind") == "skill" and metadata and metadata.get("summary"):

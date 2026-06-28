@@ -52,8 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    status = collect_status(Path(args.project), include_runtime=args.include_runtime, verbose=args.verbose)
     category = CATEGORY_ALIASES.get(args.category) if args.category else None
+    status = collect_status(
+        Path(args.project),
+        include_runtime=args.include_runtime,
+        verbose=args.verbose,
+        mcp_tool_name=args.name if category == "mcps" else None,
+    )
 
     if args.name and not category:
         build_parser().error("name can only be used after a category, for example: ccd mcp playwright")

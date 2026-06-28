@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
+import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -21,16 +23,18 @@ def get_control_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def collect_status(project_root: Path, include_runtime: bool = False, verbose: bool = False) -> dict[str, Any]:
+def collect_status(project_root: Path, include_runtime: bool = False, verbose: bool = False, mcp_tool_name: str | None = None) -> dict[str, Any]:
     project_root = project_root.resolve(strict=False)
     control_root = get_control_root()
     diagnostics: list[Diagnostic] = []
 
+    user_state_path = Path.home() / ".claude.json"
     user_settings_path = USER_CLAUDE_DIR / "settings.json"
     user_local_settings_path = USER_CLAUDE_DIR / "settings.local.json"
     project_settings_path = project_root / ".claude" / "settings.json"
     project_local_settings_path = project_root / ".claude" / "settings.local.json"
 
+    user_state = read_json(user_state_path, diagnostics, optional=True)
     user_settings = read_json(user_settings_path, diagnostics)
     user_local_settings = read_json(user_local_settings_path, diagnostics, optional=True)
     project_settings = read_json(project_settings_path, diagnostics, optional=True)
@@ -40,7 +44,7 @@ def collect_status(project_root: Path, include_runtime: bool = False, verbose: b
     provider = collect_provider(user_settings, user_local_settings, project_settings, project_local_settings)
 
     plugins = collect_plugins(enabled_plugins, diagnostics)
-    mcps = collect_mcps(project_root, control_root, plugins, diagnostics)
+    mcps = collect_mcps(project_root, control_root, plugins, diagnostics, user_state=user_state, tool_name=mcp_tool_name)
     skills = collect_skills(project_root, control_root, plugins, diagnostics)
     agents = collect_agents(project_root, control_root, plugins)
     hooks = collect_hooks(project_root, user_settings, user_local_settings, project_settings, project_local_settings, plugins)
@@ -52,7 +56,7 @@ def collect_status(project_root: Path, include_runtime: bool = False, verbose: b
     status = {
         "project_root": str(project_root),
         "control_root": str(control_root),
-        "sources": collect_sources(project_root, control_root, verbose),
+        "sources": collect_sources(project_root, control_root, verbose, user_state_path),
         "provider": provider,
         "plugins": sorted_items(plugins),
         "mcps": sorted_items(mcps),
@@ -223,20 +227,30 @@ def plugin_components(install_path: Path) -> dict[str, Any]:
     return components
 
 
-def collect_mcps(project_root: Path, control_root: Path, plugins: list[StatusItem], diagnostics: list[Diagnostic]) -> list[StatusItem]:
+def collect_mcps(
+    project_root: Path,
+    control_root: Path,
+    plugins: list[StatusItem],
+    diagnostics: list[Diagnostic],
+    user_state: dict[str, Any],
+    tool_name: str | None = None,
+) -> list[StatusItem]:
     items: list[StatusItem] = []
+    user_state_path = Path.home() / ".claude.json"
+    collect_mcp_servers(user_state.get("mcpServers", {}) if isinstance(user_state, dict) else {}, "global", "configured", "yes", str(user_state_path), items, diagnostics, tool_name=tool_name)
+
     project_mcp = project_root / ".mcp.json"
-    collect_mcp_config(project_mcp, "project", "configured", "yes", items, diagnostics)
+    collect_mcp_config(project_mcp, "project", "configured", "yes", items, diagnostics, tool_name=tool_name)
 
     for plugin in plugins:
         install_path = plugin.metadata.get("install_path")
         if not install_path:
             continue
         mcp_path = Path(str(install_path)) / ".mcp.json"
-        collect_mcp_config(mcp_path, "user", "plugin-provided", plugin.effective, items, diagnostics, managed_by=plugin.name)
+        collect_mcp_config(mcp_path, "user", "plugin-provided", plugin.effective, items, diagnostics, managed_by=plugin.name, tool_name=tool_name)
 
     for nested_mcp in find_nested_mcp_configs(project_root):
-        collect_mcp_config(nested_mcp, "nested-project", "configured", "no", items, diagnostics)
+        collect_mcp_config(nested_mcp, "nested-project", "configured", "no", items, diagnostics, tool_name=tool_name)
         diagnostics.append(Diagnostic(
             "warning",
             f"Nested .mcp.json is not effective for project root unless Claude is launched there: {nested_mcp}",
@@ -257,11 +271,34 @@ def collect_mcps(project_root: Path, control_root: Path, plugins: list[StatusIte
     return items
 
 
-def collect_mcp_config(path: Path, scope: str, provider: str, effective: str, items: list[StatusItem], diagnostics: list[Diagnostic], managed_by: str | None = None) -> None:
+def collect_mcp_config(
+    path: Path,
+    scope: str,
+    provider: str,
+    effective: str,
+    items: list[StatusItem],
+    diagnostics: list[Diagnostic],
+    managed_by: str | None = None,
+    tool_name: str | None = None,
+) -> None:
     if not path.exists():
         return
     config = read_json(path, diagnostics, optional=True)
     servers = config.get("mcpServers", {}) if isinstance(config, dict) else {}
+    collect_mcp_servers(servers, scope, provider, effective, str(path), items, diagnostics, managed_by=managed_by, tool_name=tool_name)
+
+
+def collect_mcp_servers(
+    servers: Any,
+    scope: str,
+    provider: str,
+    effective: str,
+    source_file: str,
+    items: list[StatusItem],
+    diagnostics: list[Diagnostic],
+    managed_by: str | None = None,
+    tool_name: str | None = None,
+) -> None:
     if not isinstance(servers, dict):
         return
     for name, server in servers.items():
@@ -273,7 +310,10 @@ def collect_mcp_config(path: Path, scope: str, provider: str, effective: str, it
             "env": server.get("env", {}),
             "config": server,
         })
-        source_file = str(path)
+        if tool_name and mcp_name_matches(str(name), tool_name):
+            tools = collect_mcp_tools(server, diagnostics, source_file, str(name))
+            if tools:
+                metadata["tools"] = tools
         severity = "warning" if scope == "nested-project" else "error"
         for label, value in (("MCP command", server.get("command")),):
             diag = check_absolute_path(value, source_file, label, severity=severity)
@@ -293,6 +333,123 @@ def collect_mcp_config(path: Path, scope: str, provider: str, effective: str, it
             managed_by=managed_by,
             metadata=metadata,
         ))
+
+
+def mcp_name_matches(name: str, requested: str) -> bool:
+    name_key = name.casefold()
+    requested_key = requested.casefold()
+    return name_key == requested_key or requested_key in name_key
+
+
+def collect_mcp_tools(server: dict[str, Any], diagnostics: list[Diagnostic], source_file: str, name: str) -> list[dict[str, Any]]:
+    if server.get("type") not in {None, "stdio"}:
+        return []
+    command = server.get("command")
+    if not isinstance(command, str) or not command:
+        return []
+    args = server.get("args", [])
+    if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+        return []
+    env = os.environ.copy()
+    server_env = server.get("env", {})
+    if isinstance(server_env, dict):
+        for key, value in server_env.items():
+            if isinstance(key, str) and isinstance(value, str):
+                env[key] = os.path.expandvars(value)
+    try:
+        proc = subprocess.Popen(
+            [os.path.expandvars(command), *[os.path.expandvars(arg) for arg in args]],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
+    except OSError as exc:
+        diagnostics.append(Diagnostic("warning", f"Cannot start MCP server to list tools for {name}: {exc}", source_file))
+        return []
+
+    try:
+        responses = exchange_mcp_messages(proc, [
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "ccdoctor", "version": "0.1.0"},
+                },
+            },
+            {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        ])
+    finally:
+        terminate_process(proc)
+
+    tools_result = next((response.get("result") for response in responses if response.get("id") == 2), None)
+    tools = tools_result.get("tools", []) if isinstance(tools_result, dict) else []
+    if not isinstance(tools, list):
+        return []
+    collected: list[dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        tool_name = tool.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            continue
+        entry = {"name": tool_name}
+        description = tool.get("description")
+        if isinstance(description, str) and description:
+            entry["description"] = description
+        collected.append(redact_mapping(entry))
+    return collected
+
+
+def exchange_mcp_messages(proc: subprocess.Popen[bytes], messages: list[dict[str, Any]], timeout: float = 3.0) -> list[dict[str, Any]]:
+    responses: list[dict[str, Any]] = []
+    for message in messages:
+        if proc.stdin is None:
+            break
+        proc.stdin.write(json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n")
+        proc.stdin.flush()
+        if "id" in message:
+            responses.extend(read_mcp_responses(proc, target_id=message["id"], timeout=timeout))
+    return responses
+
+
+def read_mcp_responses(proc: subprocess.Popen[bytes], target_id: Any, timeout: float) -> list[dict[str, Any]]:
+    responses: list[dict[str, Any]] = []
+    if proc.stdout is None:
+        return responses
+    fd = proc.stdout.fileno()
+    while True:
+        ready, _, _ = select.select([fd], [], [], timeout)
+        if not ready:
+            break
+        line = proc.stdout.readline()
+        if not line:
+            break
+        try:
+            response = json.loads(line.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(response, dict):
+            continue
+        responses.append(response)
+        if response.get("id") == target_id:
+            break
+    return responses
+
+
+def terminate_process(proc: subprocess.Popen[bytes]) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=1.0)
 
 
 def find_nested_mcp_configs(project_root: Path) -> list[Path]:
@@ -322,33 +479,8 @@ def parse_manifest_names(path: Path, diagnostics: list[Diagnostic]) -> list[str]
 
 def collect_skills(project_root: Path, control_root: Path, plugins: list[StatusItem], diagnostics: list[Diagnostic]) -> list[StatusItem]:
     items: list[StatusItem] = []
-    project_skills = project_root / ".claude" / "skills"
-    if project_skills.exists():
-        for child in sorted(project_skills.iterdir(), key=lambda p: p.name):
-            target = None
-            target_exists = child.exists()
-            if child.is_symlink():
-                try:
-                    target = child.resolve(strict=False)
-                    target_exists = target.exists()
-                except OSError:
-                    target_exists = False
-            provider, managed_by = classify_skill_target(target or child, control_root)
-            metadata = {"path": str(child), "target": str(target) if target else None, "target_exists": target_exists}
-            skill_file = (target or child) / "SKILL.md" if (target or child).is_dir() else (target or child)
-            metadata["summary"] = read_skill_summary(skill_file, diagnostics)
-            if not target_exists:
-                diagnostics.append(Diagnostic("error", f"Broken project skill link/path: {child}", str(child)))
-            items.append(StatusItem(
-                kind="skill",
-                name=child.name,
-                scope="project",
-                provider=provider,
-                source_file=str(child),
-                effective="yes" if target_exists else "no",
-                managed_by=managed_by,
-                metadata={k: v for k, v in metadata.items() if v is not None},
-            ))
+    collect_skill_directory(USER_CLAUDE_DIR / "skills", "global", control_root, items, diagnostics)
+    collect_skill_directory(project_root / ".claude" / "skills", "project", control_root, items, diagnostics)
 
     for plugin in plugins:
         install_path = plugin.metadata.get("install_path")
@@ -383,6 +515,38 @@ def collect_skills(project_root: Path, control_root: Path, plugins: list[StatusI
     return items
 
 
+def collect_skill_directory(directory: Path, scope: str, control_root: Path, items: list[StatusItem], diagnostics: list[Diagnostic]) -> None:
+    if not directory.exists():
+        return
+    for child in sorted(directory.iterdir(), key=lambda p: p.name):
+        if child.name.startswith("."):
+            continue
+        target = None
+        target_exists = child.exists()
+        if child.is_symlink():
+            try:
+                target = child.resolve(strict=False)
+                target_exists = target.exists()
+            except OSError:
+                target_exists = False
+        provider, managed_by = classify_skill_target(target or child, control_root)
+        metadata = {"path": str(child), "target": str(target) if target else None, "target_exists": target_exists}
+        skill_file = (target or child) / "SKILL.md" if (target or child).is_dir() else (target or child)
+        metadata["summary"] = read_skill_summary(skill_file, diagnostics)
+        if not target_exists:
+            diagnostics.append(Diagnostic("error", f"Broken {scope} skill link/path: {child}", str(child)))
+        items.append(StatusItem(
+            kind="skill",
+            name=child.name,
+            scope=scope,
+            provider=provider,
+            source_file=str(child),
+            effective="yes" if target_exists else "no",
+            managed_by=managed_by,
+            metadata={k: v for k, v in metadata.items() if v is not None},
+        ))
+
+
 def read_skill_summary(path: Path, diagnostics: list[Diagnostic], max_lines: int = 12) -> str:
     text = read_text(path, diagnostics, optional=True)
     lines: list[str] = []
@@ -414,7 +578,7 @@ def collect_agents(project_root: Path, control_root: Path, plugins: list[StatusI
     items: list[StatusItem] = []
     for scope, agents_dir, provider, managed_by, effective in (
         ("project", project_root / ".claude" / "agents", "configured", "project", "yes"),
-        ("custom", control_root / "skills" / "custom" / "profile-project-bootstrap" / "profiles", "profile-provided", "my_ai profile", "maybe"),
+        ("custom", control_root / "profiles", "profile-provided", "my_ai profile", "maybe"),
     ):
         if not agents_dir.exists():
             continue
@@ -547,13 +711,14 @@ def probe_runtime(provider: dict[str, Any], diagnostics: list[Diagnostic]) -> No
         diagnostics.append(Diagnostic("warning", f"Local proxy health probe failed: {exc}", base_url))
 
 
-def collect_sources(project_root: Path, control_root: Path, verbose: bool) -> dict[str, Any]:
+def collect_sources(project_root: Path, control_root: Path, verbose: bool, user_state_path: Path) -> dict[str, Any]:
     sources = {
         "user_settings": str(USER_CLAUDE_DIR / "settings.json"),
         "plugin_registry": str(USER_CLAUDE_DIR / "plugins" / "installed_plugins.json"),
         "project_mcp": str(project_root / ".mcp.json"),
         "project_settings": str(project_root / ".claude"),
         "control_manifests": [
+            str(user_state_path),
             str(control_root / "tools" / "TOOL_MANIFEST.md"),
             str(control_root / "skills" / "SKILL_MANIFEST.md"),
             str(control_root / "plugins" / "PLUGIN_MANIFEST.md"),

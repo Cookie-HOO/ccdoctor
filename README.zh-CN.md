@@ -117,7 +117,7 @@ ccd -p ~/Projects/my_ai
 ccd mcp
 ccd mcp playwright
 ccd hook PreToolUse
-ccd skill profile-project-bootstrap
+ccd skill profile-project-manager
 ```
 
 获取机器可读输出：
@@ -191,6 +191,13 @@ ccd mcp playwright -p ~/Projects/my_ai
         [
           "-lc",
           "node \"$MY_AI_ROOT/mcps/playwright-mcp/node_modules/@playwright/mcp/cli.js\""
+        ]
+      tools:
+        [
+          {
+            "name": "browser_click",
+            "description": "Perform click on a web page"
+          }
         ]
 ```
 
@@ -290,19 +297,19 @@ ccdoctor [options] [category] [name]
 |---|---|---|
 | Provider/model | `provider`, `model` | 模型、statusline、Claude/Anthropic 环境设置、可选 runtime probe。 |
 | Plugins | `plugin`, `plugins` | 已安装/启用的 Claude Code plugin 和 plugin metadata。 |
-| MCPs | `mcp`, `mcps` | 项目、嵌套项目、plugin-provided、manifest-declared MCP servers。 |
-| Skills | `skill`, `skills` | 项目 skills、plugin-provided skills、runtime/manifest-declared skills。 |
+| MCPs | `mcp`, `mcps` | 全局、项目、嵌套项目、plugin-provided、manifest-declared MCP servers。 |
+| Skills | `skill`, `skills` | 全局 skills、项目 skills、plugin-provided skills、runtime/manifest-declared skills。 |
 | Agents | `agent`, `agents` | 项目 agents、profile-provided agents、plugin-provided agents。 |
 | Hooks | `hook`, `hooks` | 用户/项目 hooks 和 plugin-provided hook events。 |
 | Permissions | `permission`, `permissions` | Claude Code allow/deny 权限设置。 |
 | Diagnostics | `diagnostic`, `diagnostics`, `diag` | 收集状态时发现的 warnings/errors。 |
 
-在分类后传入 `name` 可以缩小到匹配条目，并输出详情 metadata：
+在分类后传入 `name` 可以缩小到匹配条目，并输出详情 metadata。对于已配置的 stdio MCP，MCP 详情视图还会短暂启动指定 server；如果它响应 `tools/list`，会列出所有可用工具和描述：
 
 ```bash
 ccd mcp playwright
 ccd hook PreToolUse
-ccd skill profile-project-bootstrap
+ccd skill profile-project-manager
 ccd plugin claude-mem
 ```
 
@@ -327,6 +334,7 @@ ccd plugin claude-mem
 | 值 | 含义 |
 |---|---|
 | `project` | 直接配置在被检查项目中。通常在 Claude 从该目录启动时生效。 |
+| `global` | 来自全局 Claude Code 配置，例如 `~/.claude.json` 中的 MCP servers 或 `~/.claude/skills`。 |
 | `user` | 来自当前用户的 Claude Code 配置或 plugin 安装。 |
 | `nested-project` | 位于项目树下，但不是当前被检查的根目录。通常对当前根目录不生效。 |
 | `runtime` | 来自 Claude Code runtime 或生成的 runtime manifest。 |
@@ -377,7 +385,7 @@ NO_COLOR=1 ccd --json <category> [name] -p <project>
 ```bash
 NO_COLOR=1 ccd --json mcp playwright -p /repo
 NO_COLOR=1 ccd --json hook PreToolUse -p /repo
-NO_COLOR=1 ccd --json skill profile-project-bootstrap -p /repo
+NO_COLOR=1 ccd --json skill profile-project-manager -p /repo
 NO_COLOR=1 ccd --json diagnostics -p /repo
 ```
 
